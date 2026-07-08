@@ -42,7 +42,7 @@ export interface ProxyConfig {
 export function isSocksProxy(proxy: string | ProxyDict | undefined | null): boolean {
   if (!proxy) return false;
   const url = typeof proxy === "string" ? proxy : proxy.server;
-  return /^socks5h?:\/\//i.test(url);
+  return /^socks4h?:\/\//i.test(url) || /^socks5h?:\/\//i.test(url);
 }
 
 /**
@@ -263,6 +263,21 @@ export function resolveProxyConfig(
   browserVersion?: string
 ): ProxyConfig {
   if (!proxy) return { proxyArgs: [] };
+
+  // Reject malformed proxies up front. An empty server string would build
+  // `--proxy-server=` (Chromium rejects it → launch crash) or feed Playwright
+  // a `server: ""`.
+  if (typeof proxy === "object") {
+    const server = (proxy.server ?? "").trim();
+    if (!server) {
+      throw new Error(
+        "Proxy dict is missing a 'server' (e.g. 'http://host:port' or " +
+        "'socks5://host:1080'). Refusing to launch with an empty proxy.",
+      );
+    }
+  } else if (!proxy.trim()) {
+    throw new Error("Proxy string is empty. Provide a host:port or a full proxy URL.");
+  }
 
   if (isSocksProxy(proxy)) {
     // SOCKS5: bypass Playwright, pass directly to Chrome via --proxy-server.

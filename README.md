@@ -1348,7 +1348,6 @@ A: Yes. Pass `proxy="http://user:pass@host:port"` or `proxy="socks5://user:pass@
 - 🐛 **Bug reports & feature requests** — [GitHub Issues](https://github.com/CloakHQ/CloakBrowser/issues)
 - 📦 **PyPI** — [pypi.org/project/cloakbrowser](https://pypi.org/project/cloakbrowser/)
 - 📦 **npm** — [npmjs.com/package/cloakbrowser](https://www.npmjs.com/package/cloakbrowser)
-- ☕ **Support** — [ko-fi.com/cloakhq](https://ko-fi.com/cloakhq)
 - 📧 **Contact** — <cloakhq@pm.me>
 
 ## Security

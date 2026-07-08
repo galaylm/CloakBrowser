@@ -94,32 +94,18 @@ def _welcome_due(marker: Path, pro: bool) -> bool:
 
 
 def _show_welcome(pro: bool = False) -> None:
-    """Show welcome message on launch. A marker file gates the cadence:
-    Pro shows once ever; free re-shows every WELCOME_FREE_INTERVAL.
+    """Show a neutral, once-only startup notice.
 
-    The Pro-upsell line is shown to free-tier users only; Pro users get a plain
-    banner (no "running free tier" message, which would be false for them).
+    Prints framework identification only — no external promotion, upsell, or
+    monetization links. A marker file gates the cadence so it appears at most
+    once per environment, keeping launch output clean for automated pipelines.
     """
     marker = get_cache_dir() / ".welcome_shown"
     if not _welcome_due(marker, pro):
         return
     sys.stderr.write("\n")
-    sys.stderr.write("  CloakBrowser — stealth Chromium for automation\n")
+    sys.stderr.write("  CloakBrowser — stealth Chromium wrapper\n")
     sys.stderr.write("  https://github.com/CloakHQ/CloakBrowser\n")
-    sys.stderr.write("\n")
-    if pro:
-        sys.stderr.write(
-            f"  CloakBrowser Pro active (v{PRO_MAJOR}) — latest binary, newest patches.\n"
-        )
-        sys.stderr.write("  Pro support → support@cloakbrowser.dev\n")
-    else:
-        free_major = CHROMIUM_VERSION.split(".")[0]
-        sys.stderr.write(
-            f"  Running free tier (v{free_major}). "
-            f"Pro = latest binary (v{PRO_MAJOR}) + newest anti-bot patches.\n"
-        )
-        sys.stderr.write("  Stay ahead of detection → https://cloakbrowser.dev\n")
-    sys.stderr.write("  Star us if CloakBrowser helps your project!\n")
     sys.stderr.write("\n")
     try:
         marker.parent.mkdir(parents=True, exist_ok=True)

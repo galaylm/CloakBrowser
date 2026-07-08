@@ -219,15 +219,26 @@ def launch(
     env_kwargs = {} if launch_env is None else {"env": launch_env}
 
     pw = sync_playwright().start()
-    browser = pw.chromium.launch(
-        executable_path=binary_path,
-        headless=headless,
-        args=chrome_args,
-        ignore_default_args=IGNORE_DEFAULT_ARGS,
-        **env_kwargs,
-        **proxy_kwargs,
-        **kwargs,
-    )
+    try:
+        browser = pw.chromium.launch(
+            executable_path=binary_path,
+            headless=headless,
+            args=chrome_args,
+            ignore_default_args=IGNORE_DEFAULT_ARGS,
+            **env_kwargs,
+            **proxy_kwargs,
+            **kwargs,
+        )
+    except BaseException:
+        # Launch failed — release the Playwright driver subprocess so it does
+        # not leak (a zombie chromium/node process) when the caller's launch
+        # call raises. Without this, a bad binary/proxy arg leaves a dangling
+        # subprocess for the lifetime of the host process.
+        try:
+            pw.stop()
+        except Exception:
+            pass
+        raise
 
     # Patch close() to also stop the Playwright instance
     _original_close = browser.close
@@ -324,15 +335,22 @@ async def launch_async(  # noqa: C901
     env_kwargs = {} if launch_env is None else {"env": launch_env}
 
     pw = await async_playwright().start()
-    browser = await pw.chromium.launch(
-        executable_path=binary_path,
-        headless=headless,
-        args=chrome_args,
-        ignore_default_args=IGNORE_DEFAULT_ARGS,
-        **env_kwargs,
-        **proxy_kwargs,
-        **kwargs,
-    )
+    try:
+        browser = await pw.chromium.launch(
+            executable_path=binary_path,
+            headless=headless,
+            args=chrome_args,
+            ignore_default_args=IGNORE_DEFAULT_ARGS,
+            **env_kwargs,
+            **proxy_kwargs,
+            **kwargs,
+        )
+    except BaseException:
+        try:
+            await pw.stop()
+        except Exception:
+            pass
+        raise
 
     # Patch close() to also stop the Playwright instance
     _original_close = browser.close
@@ -464,15 +482,22 @@ def launch_persistent_context(
     seed_widevine_hint(user_data_dir, binary_path)
 
     pw = sync_playwright().start()
-    context = pw.chromium.launch_persistent_context(
-        user_data_dir=os.fspath(user_data_dir),
-        executable_path=binary_path,
-        headless=headless,
-        args=chrome_args,
-        ignore_default_args=IGNORE_DEFAULT_ARGS,
-        **proxy_kwargs,
-        **context_kwargs,
-    )
+    try:
+        context = pw.chromium.launch_persistent_context(
+            user_data_dir=os.fspath(user_data_dir),
+            executable_path=binary_path,
+            headless=headless,
+            args=chrome_args,
+            ignore_default_args=IGNORE_DEFAULT_ARGS,
+            **proxy_kwargs,
+            **context_kwargs,
+        )
+    except BaseException:
+        try:
+            pw.stop()
+        except Exception:
+            pass
+        raise
 
     # Patch close() to also stop the Playwright instance
     _original_close = context.close
@@ -1400,11 +1425,17 @@ def _supports_http_proxy_inline_auth(version: str | None = None) -> bool:
 
 
 def _is_socks_proxy(proxy: str | ProxySettings | None) -> bool:
-    """Check if the proxy uses SOCKS5 protocol."""
+    """Check if the proxy uses SOCKS5/SOCKS5h/SOCKS4 protocol.
+
+    All three are handed to Chromium's ``--proxy-server`` directly (Chrome
+    parses ``socks4://`` natively), so they share one code path. Plain
+    ``socks://`` (no version) is intentionally NOT matched — it is not a valid
+    Chromium scheme and would silently mis-route.
+    """
     if proxy is None:
         return False
     url = proxy.get("server", "") if isinstance(proxy, dict) else proxy
-    return url.lower().startswith(("socks5://", "socks5h://"))
+    return url.lower().startswith(("socks5://", "socks5h://", "socks4://"))
 
 
 def _resolve_proxy_config(
@@ -1422,6 +1453,22 @@ def _resolve_proxy_config(
     """
     if proxy is None:
         return {}, []
+
+    # Reject malformed proxies up front instead of emitting an empty
+    # `--proxy-server=` (which Chromium rejects → launch crash) or passing a
+    # `server: ""` dict to Playwright.
+    if isinstance(proxy, dict):
+        server = (proxy.get("server") or "").strip()
+        if not server:
+            raise ValueError(
+                "Proxy dict is missing a 'server' (e.g. 'http://host:port' or "
+                "'socks5://host:1080'). Refusing to launch with an empty proxy."
+            )
+    elif isinstance(proxy, str):
+        if not proxy.strip():
+            raise ValueError(
+                "Proxy string is empty. Provide a host:port or a full proxy URL."
+            )
 
     if _is_socks_proxy(proxy):
         # SOCKS5: bypass Playwright, pass directly to Chrome via --proxy-server.

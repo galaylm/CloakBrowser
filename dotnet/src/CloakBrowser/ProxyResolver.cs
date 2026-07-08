@@ -154,7 +154,9 @@ internal static class ProxyResolver
 
     public static bool IsSocksProxy(string? url) =>
         url != null && (url.StartsWith("socks5://", StringComparison.OrdinalIgnoreCase)
-                        || url.StartsWith("socks5h://", StringComparison.OrdinalIgnoreCase));
+                        || url.StartsWith("socks5h://", StringComparison.OrdinalIgnoreCase)
+                        || url.StartsWith("socks4://", StringComparison.OrdinalIgnoreCase)
+                        || url.StartsWith("socks4h://", StringComparison.OrdinalIgnoreCase));
 
     public static bool IsSocksProxy(ProxySettings proxy) => IsSocksProxy(proxy.Server);
 
